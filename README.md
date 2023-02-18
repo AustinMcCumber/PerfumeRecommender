@@ -22,13 +22,68 @@ Parfumo.net is a popular online community and database dedicated to fragrances. 
 
 5. Calculate dissimilarity matrix. Because our data is categorical/factored, we need to use the Gower metric to create the matrix. This can be done easily through the daisy package in R. The data is now setup and we can begin the shiny app. 
 
-6. Create UI. This was done in the most simple way possible. A text box is created with text saying "Type or select a fragrance name" and a drop down menu is included. When the user starts typing, it shows options from the list. The shinyWidget app has this feature. 
+```
+gower_dist <- daisy(parfumosubset[2:22], metric = "gower", type = list())
+gower_matrix <- as.matrix(gower_dist)
+```
+
+6. Create UI. This was done in the most simple way possible for the scope of this project. A text box is created with text saying "Type or select a fragrance name" and a drop down menu is included. When the user starts typing, it shows options from the list. The shinyWidget app has this feature. 
 
 7. Create the first function. The function is passed user input from the text/selection box. It then uses the name to find the matching index in the original dataset. The index is then matched to the corresponding entry in the dissimilarity matrix we created. The function orders the results of the matrix and selects the top 3 closest indices. It then matches the indices to the dataframe and return the three names. 
 
+```
+similar_fragrances <- reactive({
+    if (input$query_name == "") {
+      return(NULL)
+    } else {
+      query_index <- which(parfumosubset$fragrance == input$query_name) #Pulls index from matrix based on user submission 
+      dissimilarity_scores <- gower_matrix[query_index, ] #Pulls scores for given index
+      top_3_indices <- order(dissimilarity_scores)[1:3] #Returns the 3 most similar indices
+      top_3_entries <- parfumosubset[top_3_indices, ] #Returns the fragrance names based on previous indices
+      
+```
+
 8. Create the second function. This function is more simple. It is passed the top 3 indices from the previous function and checks which columns have matching "yes" factors. For example, similar entries are likely to have both accords matching - fruity and smoky might both be labeled yes for each pair in the dataframe. 
 
+```
+#New function that returns columns where each pair has a common accord
+      matching_cols <- lapply(top_3_indices, function(i) {
+        match_cols <- colnames(parfumosubset)[catcolumns][which(parfumosubset[i, catcolumns] == "yes" &
+                                                                  parfumosubset[query_index, catcolumns] == "yes")]
+        match_cols
+      })
+      return(list(fragrances = top_3_entries, matching_cols = matching_cols))
+```
 9. The final function outputs the results into text. It displays the three closest fragrances for eac choices, as well as the matching columns (if any exist). 
+
+```
+ # Render text output of similar fragrances
+  output$results <- renderPrint({
+    similar_fragrances <- similar_fragrances()
+    
+    if (is.null(similar_fragrances)) {
+      return("")
+    }
+    
+    fragrances <- similar_fragrances$fragrances
+    matching_cols <- similar_fragrances$matching_cols
+    
+    output_text <- "You may also like:\n"
+    
+    for (i in 1:nrow(fragrances)) {
+      output_text <- paste(output_text, fragrances[i, "fragrance"], "\n")
+      
+      if (length(matching_cols[[i]]) > 0) {
+        output_text <- paste(output_text, "Similar Accords: ", 
+                             paste(matching_cols[[i]], collapse = ", "), "\n")
+      } else {
+        output_text <- paste(output_text, "No matching factors found.\n")
+      }
+    }
+    
+    cat(output_text)
+  })
+```
 
 ## Example
 
@@ -38,7 +93,7 @@ For this example I selected the fragrance Tobacco Vanille by Tom Ford. See the f
 
 ## Final Thoughts
 
-This project was a success and could easily be implemented as a cold-start recommedation system for other purposes and different datasets. The Gower metric works with mixed data types as well, so columns with non-categorical data could be used too. The only issue I have not yet solved is that sometimes the returned fragrances include the input fragrance as well. This will be fixed in the future. 
+This project was a success and could easily be implemented as a cold-start recommedation system for other purposes and different datasets. The Gower metric works with mixed data types as well, so columns with non-categorical data could be used too. The only issue I have not yet solved is that sometimes the returned fragrances include the input fragrance as well. This will be fixed in a future update.  
 
 
 
